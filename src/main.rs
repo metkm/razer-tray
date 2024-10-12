@@ -2,6 +2,11 @@
 
 mod battery;
 
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
+
 use battery::get_battery;
 use image::GenericImageView;
 use tao::event_loop::{ControlFlow, EventLoop};
@@ -26,17 +31,27 @@ fn main() {
 
     let event_loop = EventLoop::new();
 
-    let mut battery_level_text = String::new();
+    let battery_level = Arc::new(Mutex::new(get_battery().unwrap() as u8));
+    let is_battery_level_changed = Arc::new(Mutex::new(true));
 
-    std::thread::scope(|s| {
-        s.spawn(|| {
-            let battery = get_battery().unwrap() as u8;
-            battery_level_text = format!("Batter Level {}%", battery as u8);
-        });
+    let battery_level_arc_2 = battery_level.clone();
+    let is_battery_level_changed_arc_2= is_battery_level_changed.clone();
+
+    std::thread::spawn(move || loop {
+        let battery = get_battery().unwrap() as u8;
+        let mut battery_level = battery_level.lock().unwrap();
+
+        if battery != *battery_level {
+            *battery_level = battery as u8;
+            *is_battery_level_changed.lock().unwrap() = true;
+        }
+
+        std::thread::sleep(Duration::from_secs(2));
     });
 
     event_loop.run(move |_, _, control_flow| {
-        *control_flow = ControlFlow::Wait;
+        let target = std::time::Instant::now() + std::time::Duration::from_secs(10); 
+        *control_flow = ControlFlow::WaitUntil(target);
 
         if let Ok(MenuEvent { id }) = MenuEvent::receiver().try_recv() {
             let quit_id = quit_item.id();
@@ -46,6 +61,14 @@ fn main() {
             }
         }
 
-        tray_icon.set_tooltip(Some(&battery_level_text)).ok();
+        if let Ok(mut is_changed) = is_battery_level_changed_arc_2.try_lock() {
+            if *is_changed {
+                if let Ok(level) = battery_level_arc_2.try_lock() {
+                    let text = Some(format!("Battery Level {}", *level));
+                    tray_icon.set_tooltip(text).ok();
+                    *is_changed = false;
+                }
+            }
+        }
     });
 }
