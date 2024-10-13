@@ -64,8 +64,17 @@ fn main() {
         if let Ok(mut is_changed) = is_battery_level_changed_arc_2.try_lock() {
             if *is_changed {
                 if let Ok(level) = battery_level_arc_2.try_lock() {
-                    let text = Some(format!("Battery Level {}", *level));
-                    tray_icon.set_tooltip(text).ok();
+                    
+                    let text = match *level {
+                        0 => {
+                            format!("Battery Level {}% (Disconnected?)", *level)
+                        },
+                        _ => {
+                            format!("Battery Level {}%", *level)
+                        }
+                    };
+
+                    tray_icon.set_tooltip(Some(text)).ok();
                     *is_changed = false;
                 }
             }
