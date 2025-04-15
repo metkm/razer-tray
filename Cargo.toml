@@ -1,11 +1,11 @@
 [package]
-name = "razer-tray"
+name = "mouse-battery"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+hidapi = "2.6.3"
 image = { version = "0.25.2", features = ["jpeg"], default-features = false }
-rusb = "0.9.4"
 tao = "0.30.3"
 tray-icon = "0.19.0"
 
