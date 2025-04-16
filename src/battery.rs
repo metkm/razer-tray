@@ -19,10 +19,9 @@ pub fn get_battery() -> Option<u8> {
         0x00,
     ];
 
-    let mut crc = 0;
-    for i in 0..(buff.len() - 1) {
-        crc += buff[i];
-    }
+    let mut crc = buff
+        .iter()
+        .fold(0, |acc, i| acc + i);
 
     crc = crc & 0xff;
     crc = 0x55 - crc;
