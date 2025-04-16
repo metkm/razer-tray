@@ -35,8 +35,8 @@ fn main() {
     let battery_level_changed = Arc::new(Mutex::new(true));
 
     std::thread::spawn({
-        let battery_level = battery_level.clone();
-        let battery_level_changed = battery_level_changed.clone();
+        let battery_level = (&battery_level).clone();
+        let battery_level_changed = (&battery_level_changed).clone();
 
         move || loop {
             let battery = get_battery().unwrap() as u8;
@@ -52,8 +52,8 @@ fn main() {
     });
 
     event_loop.run({
-        let battery_level = battery_level.clone();
-        let battery_level_changed = battery_level_changed.clone();
+        let battery_level = (&battery_level).clone();
+        let battery_level_changed = (&battery_level_changed).clone();
 
         move |_, _, control_flow| {
             let target = std::time::Instant::now() + std::time::Duration::from_secs(10);
