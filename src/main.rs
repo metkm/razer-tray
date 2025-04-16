@@ -31,51 +31,57 @@ fn main() {
 
     let event_loop = EventLoop::new();
 
-    let battery_level = Arc::new(Mutex::new(get_battery().unwrap() as u8));
-    let is_battery_level_changed = Arc::new(Mutex::new(true));
+    let battery_level = Arc::new(Mutex::new(get_battery().unwrap()));
+    let battery_level_changed = Arc::new(Mutex::new(true));
 
-    let battery_level_arc_2 = battery_level.clone();
-    let is_battery_level_changed_arc_2= is_battery_level_changed.clone();
+    std::thread::spawn({
+        let battery_level = battery_level.clone();
+        let battery_level_changed = battery_level_changed.clone();
 
-    std::thread::spawn(move || loop {
-        let battery = get_battery().unwrap() as u8;
-        let mut battery_level = battery_level.lock().unwrap();
+        move || loop {
+            let battery = get_battery().unwrap() as u8;
+            let mut battery_level = battery_level.lock().unwrap();
 
-        if battery != *battery_level {
-            *battery_level = battery as u8;
-            *is_battery_level_changed.lock().unwrap() = true;
+            if battery != *battery_level {
+                *battery_level = battery as u8;
+                *battery_level_changed.lock().unwrap() = true;
+            }
+
+            std::thread::sleep(Duration::from_secs(2));
         }
-
-        std::thread::sleep(Duration::from_secs(2));
     });
 
-    event_loop.run(move |_, _, control_flow| {
-        let target = std::time::Instant::now() + std::time::Duration::from_secs(10); 
-        *control_flow = ControlFlow::WaitUntil(target);
+    event_loop.run({
+        let battery_level = battery_level.clone();
+        let battery_level_changed = battery_level_changed.clone();
 
-        if let Ok(MenuEvent { id }) = MenuEvent::receiver().try_recv() {
-            let quit_id = quit_item.id();
+        move |_, _, control_flow| {
+            let target = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            *control_flow = ControlFlow::WaitUntil(target);
 
-            if id == quit_id {
-                std::process::exit(0);
+            if let Ok(MenuEvent { id }) = MenuEvent::receiver().try_recv() {
+                let quit_id = quit_item.id();
+
+                if id == quit_id {
+                    std::process::exit(0);
+                }
             }
-        }
 
-        if let Ok(mut is_changed) = is_battery_level_changed_arc_2.try_lock() {
-            if *is_changed {
-                if let Ok(level) = battery_level_arc_2.try_lock() {
-                    
-                    let text = match *level {
-                        0 => {
-                            format!("Battery Level {}% (Disconnected?)", *level)
-                        },
-                        _ => {
-                            format!("Battery Level {}%", *level)
-                        }
-                    };
+            if let Ok(mut is_changed) = battery_level_changed.try_lock() {
+                if *is_changed {
+                    if let Ok(level) = battery_level.try_lock() {
+                        let text = match *level {
+                            0 => {
+                                format!("Battery Level {}% (Disconnected?)", *level)
+                            }
+                            _ => {
+                                format!("Battery Level {}%", *level)
+                            }
+                        };
 
-                    tray_icon.set_tooltip(Some(text)).ok();
-                    *is_changed = false;
+                        tray_icon.set_tooltip(Some(text)).ok();
+                        *is_changed = false;
+                    }
                 }
             }
         }
