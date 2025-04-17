@@ -13,28 +13,9 @@ fn get_usb_crc(value: &[u8]) -> i32 {
     return crc;
 }
 
-fn write(hid_device: &HidDevice, command: u8) -> usize {
+fn write(hid_device: &HidDevice, command: u8, offset: Option<u8>) -> usize {
     let mut buffer: Vec<u8> = vec![
-        0x08, command, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0xef,
-    ];
-
-    let crc = get_usb_crc(&buffer[1..]);
-
-    buffer
-        .get_mut(16)
-        .and_then(|val| {
-            *val = (crc - 0x08) as u8;
-            Some(val)
-        });
-
-    let written_count = hid_device.write(&buffer).unwrap();
-    written_count
-}
-
-fn write_2(hid_device: &HidDevice, command: u8, add: u8) -> usize {
-    let mut buffer: Vec<u8> = vec![
-        0x08, command, 0x00, 0x00, add, 0x0A, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x08, command, 0x00, 0x00, offset.unwrap_or(0x00), 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
         0xef,
     ];
 
@@ -77,7 +58,7 @@ fn main() {
     let mut data: Vec<u8> = Vec::with_capacity(10 * 11);
 
     loop {
-        let written_count = write_2(&hid_device, 0x08, offset);
+        let written_count = write(&hid_device, 0x08, Some(offset));
         let response_buff = &read(&hid_device, written_count)[1..];
 
         data.extend_from_slice(&response_buff[5..]);
@@ -91,18 +72,4 @@ fn main() {
 
         offset = new_offset
     }
-
-
-
-    // let written_count = write(&hid_device, 0x04);
-    // let response_buff = &read(&hid_device, written_count)[1..];
-
-    // let v1 = response_buff.get(6)
-    //     .unwrap_or(&0);
-
-    // let v2 = response_buff.get(7)
-    //     .and_then(|item| Some(format!("{:#x}", item)))
-    //     .unwrap_or_default();
-
-    // println!("{:?} - {:?} - {:?}", response_buff, v1, v2);
 }
