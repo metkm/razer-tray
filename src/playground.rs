@@ -80,9 +80,8 @@ fn main() {
         let written_count = write_2(&hid_device, 0x08, offset);
         let response_buff = &read(&hid_device, written_count)[1..];
 
-        data.extend_from_slice(response_buff);
-        
-        println!("{:?}", response_buff);
+        data.extend_from_slice(&response_buff[5..]);
+        println!("{:?}", &response_buff[5..]);
 
         let (new_offset, overflowed) = offset.overflowing_add(10);
 
