@@ -1,4 +1,43 @@
-use hidapi::HidApi;
+use hidapi::{HidApi, HidDevice};
+
+fn get_usb_crc(value: &[u8]) -> i32 {
+    let mut value_slice = value.iter();
+    value_slice.next_back();
+
+    let mut crc = value_slice.fold(0_i32, |acc, i| acc + (*i as i32));
+
+    crc = if crc > 255 { crc - 256 } else { crc };
+    crc = 0x55 - crc;
+
+    return crc;
+}
+
+fn write(hid_device: &HidDevice, command: u8, offset: Option<u8>) -> usize {
+    let mut buffer: Vec<u8> = vec![
+        0x08, command, 0x00, 0x00, offset.unwrap_or(0x00), 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0xef,
+    ];
+
+    let crc = get_usb_crc(&buffer[1..]);
+
+    buffer
+        .get_mut(16)
+        .and_then(|val| {
+            *val = (crc - 0x08) as u8;
+            Some(val)
+        });
+
+    let written_count = hid_device.write(&buffer).unwrap();
+    written_count
+}
+
+fn read(hid_device: &HidDevice, len: usize) -> Vec<u8> {
+    let mut response_buff = Vec::with_capacity(len);
+    unsafe { response_buff.set_len(len - 1) };
+
+    hid_device.read(&mut response_buff).unwrap();
+    response_buff
+}
 
 pub fn get_battery() -> Option<u8> {
     let api = HidApi::new().unwrap();
@@ -12,35 +51,15 @@ pub fn get_battery() -> Option<u8> {
     };
 
     let hid_device = device.open_device(&api).unwrap();
-    println!("{:?}", hid_device);
+    
+    let written_count = write(&hid_device, 0x04, None);
+    let response_buff = read(&hid_device, written_count);
 
-    let mut buff = vec![
-        0x08, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00,
-    ];
+    let battery = response_buff.get(6)
+        .map(|x| *x);
 
-    let mut crc = buff
-        .iter()
-        .fold(0, |acc, i| acc + i);
-
-    crc = crc & 0xff;
-    crc = 0x55 - crc;
-
-    buff.push(crc);
-
-    let written_count = hid_device.write(&buff).unwrap();
-
-    let mut response_buff: Vec<u8> = Vec::with_capacity(16);
-    unsafe {
-        response_buff.set_len(written_count);
-    }
-
-    hid_device.read(&mut response_buff).unwrap();
-
-    let battery = response_buff.get(6).unwrap().to_owned();
-
-    Some(battery)
-
+    battery
+    
     /////////
     // Old razer code
     /////////
