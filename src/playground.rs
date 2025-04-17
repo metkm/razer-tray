@@ -1,6 +1,4 @@
-use std::{fmt::format, time::Duration};
-
-use hidapi::{DeviceInfo, HidApi};
+use hidapi::{HidApi, HidDevice};
 
 fn get_usb_crc(value: &[u8]) -> i32 {
     let mut value_slice = value.iter();
@@ -13,6 +11,33 @@ fn get_usb_crc(value: &[u8]) -> i32 {
     crc = 0x55 - crc;
 
     return crc;
+}
+
+fn write(hid_device: &HidDevice, command: u8) -> usize {
+    let mut buffer: Vec<u8> = vec![
+        0x08, command, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0xef,
+    ];
+
+    let crc = get_usb_crc(&buffer[1..]);
+
+    buffer
+        .get_mut(16)
+        .and_then(|val| {
+            *val = (crc - 0x08) as u8;
+            Some(val)
+        });
+
+    let written_count = hid_device.write(&buffer).unwrap();
+    written_count
+}
+
+fn read(hid_device: &HidDevice, len: usize) -> Vec<u8> {
+    let mut response_buff = Vec::with_capacity(len);
+    unsafe { response_buff.set_len(len - 1) };
+
+    hid_device.read(&mut response_buff).unwrap();
+    response_buff
 }
 
 fn main() {
@@ -29,26 +54,8 @@ fn main() {
 
     let hid_device = device.open_device(&api).unwrap();
 
-    let mut buffer: Vec<u8> = vec![
-        0x08, 0x12, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0xef,
-    ];
-
-    let crc = get_usb_crc(&buffer[1..]);
-
-    buffer
-        .get_mut(16)
-        .and_then(|val| {
-            *val = (crc - 0x08) as u8;
-            Some(val)
-        });
-
-    let written_count = hid_device.write(&buffer).unwrap();
-
-    let mut response_buff = Vec::with_capacity(written_count);
-    unsafe { response_buff.set_len(written_count - 1) };
-
-    hid_device.read(&mut response_buff).unwrap();
+    let written_count = write(&hid_device, 0x04);
+    let response_buff = &read(&hid_device, written_count)[1..];
 
     let v1 = response_buff.get(6)
         .unwrap_or(&0);
@@ -58,41 +65,4 @@ fn main() {
         .unwrap_or_default();
 
     println!("{:?} - {:?} - {:?}", response_buff, v1, v2);
-
-    // let mut add: u8 = 0;
-    // loop {
-    //     buffer
-    //         .get_mut(3)
-    //         .and_then(|val| {
-    //             *val = add;
-    //             Some(val)
-    //         });
-
-    //     let crc = get_usb_crc(&buffer);
-
-    //     buffer
-    //         .get_mut(15)
-    //         .and_then(|val| {
-    //             *val = (crc - 0x08) as u8;
-    //             Some(val)
-    //         });
-
-    //     let written_count = hid_device.write(&buffer)
-    //         .unwrap();
-
-    //     std::thread::sleep(Duration::from_millis(40));
-
-    //     let mut response_buff = Vec::with_capacity(written_count);
-    //     unsafe { response_buff.set_len(written_count - 1) };
-
-    //     hid_device.read(&mut response_buff).unwrap();
-
-    //     println!("{:?}", response_buff);
-
-    //     break;
-    //     add += 10;
-    //     if add > 100 {
-    //         break;
-    //     }
-    // }
 }
