@@ -1,4 +1,6 @@
-use hidapi::HidApi;
+use std::time::Duration;
+
+use hidapi::{DeviceInfo, HidApi};
 
 fn get_usb_crc(value: &[u8]) -> i32 {
     let mut value_slice = value.iter();
@@ -23,7 +25,8 @@ fn main() {
 
     let Some(device) = api
         .device_list()
-        .skip(2)
+        .filter(|device| device.vendor_id() == 13652)
+        .skip(1)
         .find(|device| device.vendor_id() == 13652)
     else {
         return;
@@ -45,7 +48,6 @@ fn main() {
             });
 
         let crc = get_usb_crc(&buffer);
-        println!("crc - {:?}", crc);
 
         buffer
             .get_mut(15)
@@ -54,13 +56,20 @@ fn main() {
                 Some(val)
             });
 
-        let write_count = hid_device.write(&buffer)
+        let written_count = hid_device.write(&buffer)
             .unwrap();
 
-        println!("{:?}", buffer);
+        std::thread::sleep(Duration::from_millis(40));
 
+        let mut response_buff = Vec::with_capacity(written_count);
+        unsafe { response_buff.set_len(written_count - 1) };
+
+        hid_device.read(&mut response_buff).unwrap();
+
+        println!("{:?}", response_buff);
+        
+        break;
         add += 10;
-
         if add > 100 {
             break;
         }
