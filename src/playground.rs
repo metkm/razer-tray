@@ -73,10 +73,27 @@ fn main() {
 
     let hid_device = device.open_device(&api).unwrap();
 
-    let written_count = write_2(&hid_device, 0x08, 0);
-    let response_buff = &read(&hid_device, written_count)[1..];
+    let mut offset = 0;
+    let mut data: Vec<u8> = Vec::with_capacity(10 * 11);
 
-    println!("{:?}", response_buff);
+    loop {
+        let written_count = write_2(&hid_device, 0x08, offset);
+        let response_buff = &read(&hid_device, written_count)[1..];
+
+        data.extend_from_slice(response_buff);
+        
+        println!("{:?}", response_buff);
+
+        let (new_offset, overflowed) = offset.overflowing_add(10);
+
+        if overflowed {
+            break;
+        }
+
+        offset = new_offset
+    }
+
+
 
     // let written_count = write(&hid_device, 0x04);
     // let response_buff = &read(&hid_device, written_count)[1..];
