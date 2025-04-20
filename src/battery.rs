@@ -1,4 +1,4 @@
-use hidapi::{HidApi, HidDevice};
+use hidapi::{BusType, HidApi, HidDevice};
 
 fn get_usb_crc(value: &[u8]) -> i32 {
     let mut value_slice = value.iter();
@@ -44,13 +44,23 @@ pub fn get_battery() -> Option<u8> {
 
     let Some(device) = api
         .device_list()
-        .skip(2)
-        .find(|device| device.vendor_id() == 13652)
+        .find(|device| {
+            let vendor_id_matches = device.vendor_id() == 13652;
+            let bus_type_matches = match device.bus_type() {
+                BusType::Usb => true,
+                _ => false
+            };
+
+            vendor_id_matches && bus_type_matches && device.path().to_str().unwrap().contains("0004#")
+        })
     else {
         return None;
     };
 
-    let hid_device = device.open_device(&api).unwrap();
+    let Ok(hid_device) = device.open_device(&api) else {
+        println!("can't find device");
+        return None;
+    };
     
     let written_count = write(&hid_device, 0x04, None);
     let response_buff = read(&hid_device, written_count);
